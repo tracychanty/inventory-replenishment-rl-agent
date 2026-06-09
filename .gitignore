@@ -1,0 +1,12 @@
+# Python cache
+__pycache__/
+*.pyc
+
+# VS Code
+.vscode/
+
+# macOS
+.DS_Store
+
+# Temporary Word files
+~$*.docx
