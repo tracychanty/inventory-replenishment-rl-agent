@@ -42,15 +42,6 @@ The agent was evaluated against two baselines:
 </details>
 
 <details>
-<summary>Model Summary</summary>
-
-<img src="Images/model_summary.png" width="900">
-
-<br><br>
-
-</details>
-
-<details>
 <summary>Training Reward Curve</summary>
 
 <img src="plots/reward_curve.png" width="900">
