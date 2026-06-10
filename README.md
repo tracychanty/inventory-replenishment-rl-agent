@@ -8,6 +8,17 @@ The agent was evaluated against two baselines:
 
 ---
 
+## Key Highlights
+
+- Designed a custom Gymnasium inventory environment with stochastic demand and supplier lead times.
+- Developed a tabular Q-learning agent for inventory replenishment optimization.
+- Evaluated against random and rule-based reorder-point baselines.
+- Reduced stockouts by 39% relative to the standard reorder-point policy.
+- Conducted robustness testing including reward hacking, demand surges, training instability, and distributional shift.
+- Produced a deployment recommendation through business-oriented performance evaluation.
+
+---
+
 ## Problem Framing
 
 ### State
@@ -28,13 +39,13 @@ Each state contains operational information available to the inventory manager:
 
 The agent chooses one inventory order quantity per day:
 
-Order quantity âˆˆ {0, 20, 40, 50, 60, 70, 80} units
+Order quantity ∈ {0, 20, 40, 50, 60, 70, 80} units
 
 ### Reward
 
 The reward function represents daily business profit:
 
-Reward = Sales Revenue âˆ’ Holding Cost âˆ’ Stockout Penalty âˆ’ Ordering Cost
+Reward = Sales Revenue - Holding Cost - Stockout Penalty - Ordering Cost
 
 Where:
 - Revenue = units sold × selling price
@@ -45,7 +56,7 @@ Where:
 ### Transition
 
 The environment includes:
-- Poisson customer demand (Î»=20 weekdays, Î»=25 weekends)
+- Poisson customer demand (λ=20 weekdays, λ=25 weekends)
 - Two-day supplier lead time
 
 ### Horizon
@@ -65,18 +76,26 @@ The environment includes:
 
 ## Project Structure
 
-```
+```text
 .
-â”œâ”€â”€ env.py                  # Custom Gymnasium inventory environment
-â”œâ”€â”€ baseline.py             # Random policy and (s, S) reorder-point policy
-â”œâ”€â”€ q_agent.py              # Tabular Q-learning agent implementation and training
-â”œâ”€â”€ plot.py                 # Visualization generation
-â”œâ”€â”€ failure_analysis.py     # Safety and robustness experiments (reward hacking, unsafe behaviour, instability, overfitting)
-â”œâ”€â”€ q_table.pkl             # Pre-trained Q-table (skip retraining)
-â”œâ”€â”€
-â”œâ”€â”€ plots                   # behavior_episode.png, cost_breakdown.png, policy_comparison.png, reward_curve.png, instability.png
-â”œâ”€â”€ business_memo.docx      # Deployment recommendation memo
-â””â”€â”€ README.md
+├── env.py                  # Custom Gymnasium inventory environment
+├── baseline.py             # Random policy and (s, S) reorder-point policy
+├── q_agent.py              # Tabular Q-learning agent implementation and training
+├── plot.py                 # Visualization generation
+├── failure_analysis.py     # Safety and robustness experiments
+├── q_table.pkl             # Pre-trained Q-table
+├── requirements.txt
+├── README.md
+│
+├── plots/
+│   ├── behavior_episode.png
+│   ├── cost_breakdown.png
+│   ├── policy_comparison.png
+│   ├── reward_curve.png
+│   └── instability.png
+│
+└── docs/
+    └── business_memo.pdf
 ```
 
 ---
@@ -95,18 +114,16 @@ The environment includes:
 
 Rolling average demand (`obs[2]`) and inventory position (`obs[5]`) are present in the environment observation but not used in the Q-state.
 
-Q-table size: **5 Ã— 2 Ã— 3 Ã— 2 Ã— 4 Ã— 7 = 1,680 entries**
+Q-table size: **5 × 2 × 3 × 2 × 4 × 7 = 1,680 entries**
 
 **Hyperparameter tuning:** Before full training, `q_agent.py` runs a validation sweep across five candidate configurations (varying Î±, Î³, Îµ-decay, and bin granularity) on a held-out seed to select the best configuration automatically.
 
 **Best configuration (selected by sweep):**
 
-| Parameter | Value |
-|---|---|
-| Learning rate Î± | 0.1 |
-| Discount factor Î³ | 0.98 |
-| Îµ start / end | 1.0 â†’ 0.05 |
-| Îµ decay | 0.997 per episode |
+| Learning rate (alpha) | 0.1 |
+| Discount factor (gamma) | 0.98 |
+| Epsilon start / end | 1.0 -> 0.05 |
+| Epsilon decay | 0.997 per episode |
 | Training episodes | 3,000 |
 
 **Action masking:** When a pending order is already in transit, the agent is restricted to action 0 (order nothing), preventing illegal double-ordering and reducing wasted exploration.
@@ -141,7 +158,7 @@ Evaluates the random policy (lower bound) and the (s=60, S=120) reorder-point po
 ```bash
 python q_agent.py
 ```
-Trains the agent for 3,000 episodes (~2â€“3 minutes on a standard laptop), saves the Q-table to `q_table.pkl`, plots the training reward curve, and prints a three-policy comparison.
+Trains the agent for 3,000 episodes (~2-3 minutes on a standard laptop), saves the Q-table to `q_table.pkl`, plots the training reward curve, and prints a three-policy comparison.
 
 **4. Generate all plots**
 ```bash
@@ -177,21 +194,21 @@ The Q-learning agent matches the standard reorder-point policy on profit and red
 | File | Description |
 |---|---|
 | `reward_curve.png` | Training reward per episode + 100-episode moving average. Shows convergence to ~$5,000 by episode 500. |
-| `policy_comparison.png` | Mean reward Â± 1 std for all policies across 200 evaluation episodes. |
+| `policy_comparison.png` | Mean reward ± 1 std for all policies across 200 evaluation episodes. |
 | `cost_breakdown.png` | Stacked cost components (ordering, holding, stockout) per policy with net reward overlay. |
 | `behavior_episode.png` | Single greedy episode: inventory level, daily demand, and orders placed over 30 days. |
 | `instability.png` | Training reward comparison: Î±=0.1 (stable) vs Î±=0.9 (unstable). |
 
 ---
 
-## Failure Analysis Summary
+## Robustness & Risk Analysis
 
 | Failure Mode | Finding | Mitigation |
 |---|---|---|
 | Reward hacking | Under a $1 stockout penalty, agent chose "order 0" (order nothing) in 66.7% of steps | Validate stockout penalty against true lost-sale cost; alert on sustained near-zero stock |
-| Demand surge | Stockouts rose from 10.7 to 287.7/ep under 1.5Ã— demand | Fallback to reorder-point policy when rolling avg demand > 1.3Ã— training mean; quarterly retraining on recent demand data |
-| Training instability | Î±=0.9 produced reward std of 1,002 vs 283 for Î±=0.1 | Lock hyperparameters; require hold-out validation before retraining |
-| Distributional shift | Agent earned $4,979 vs reorder-point $4,886 on seasonal demand | Robust â€” agent still outperforms. Domain randomisation recommended for future work |
+| Demand surge | Stockouts rose from 10.7 to 287.7/ep under 1.5× demand | Fallback to reorder-point policy when rolling avg demand > 1.3Ã— training mean; quarterly retraining on recent demand data |
+| Training instability | alpha=0.9 produced reward std of 1,002 vs 283 for alpha=0.1 | Lock hyperparameters; require hold-out validation before retraining |
+| Distributional shift | Agent earned $4,979 vs reorder-point $4,886 on seasonal demand | Robust: the agent still outperforms the reorder-point policy. Domain randomisation recommended for future work |
 
 ---
 
