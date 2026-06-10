@@ -19,6 +19,77 @@ The agent was evaluated against two baselines:
 
 ---
 
+## Results Preview
+
+<details>
+<summary>Policy Comparison</summary>
+
+<br>
+
+<img src="plots/policy_comparison.png" width="900">
+
+<br><br>
+
+</details>
+
+<details>
+<summary>Inventory Behaviour</summary>
+
+<img src="plots/behavior_episode.png" width="900">
+
+<br><br>
+
+</details>
+
+<details>
+<summary>Model Summary</summary>
+
+<img src="Images/model_summary.png" width="900">
+
+<br><br>
+
+</details>
+
+<details>
+<summary>Training Reward Curve</summary>
+
+<img src="plots/reward_curve.png" width="900">
+
+<br><br>
+
+</details>
+
+---
+
+## Result Summary
+
+Evaluated over 200 episodes with seed=42:
+
+| Policy | Mean Reward | Std | Stockouts / ep |
+|---|---|---|---|
+| Random (lower bound) | $4,675 | $499 | 18.5 |
+| Reorder-Point s=60 S=120 | $5,512 | $222 | 15.5 |
+| Reorder-Point s=70 S=130 (best tuned) | $5,573 | $262 | 3.1 |
+| **Q-Learning Agent** | **$5,521** | **$257** | **9.4** |
+
+The Q-learning agent matches the standard reorder-point policy on profit and reduces stockouts by 39% relative to that baseline. The grid-searched reorder-point policy (s=70, S=130) edges ahead on raw profit but carries higher holding costs ($574 vs $521). The Q-learning agent targets leaner inventory profile that accepts more stockout risk in exchange for lower carrying costs. Whether this trade-off is preferable depends on how much weight the business places on storage costs versus service-level consistency.
+
+---
+
+## Tech Stack
+
+This project combines reinforcement learning, inventory optimization, and business decision analysis to evaluate whether learned policies can outperform traditional inventory control heuristics.
+
+- Python
+- Reinforcement Learning (Tabular Q-Learning)
+- Gymnasium
+- NumPy
+- Matplotlib
+- Inventory Optimization
+- Markov Decision Processes (MDP)
+
+---
+
 ## Problem Framing
 
 ### State
@@ -116,7 +187,7 @@ Rolling average demand (`obs[2]`) and inventory position (`obs[5]`) are present 
 
 Q-table size: **5 × 2 × 3 × 2 × 4 × 7 = 1,680 entries**
 
-**Hyperparameter tuning:** Before full training, `q_agent.py` runs a validation sweep across five candidate configurations (varying Î±, Î³, Îµ-decay, and bin granularity) on a held-out seed to select the best configuration automatically.
+**Hyperparameter tuning:** Before full training, `q_agent.py` runs a validation sweep across five candidate configurations (varying learning rate, discount factor, epsilon decay, and bin granularity) on a held-out seed to select the best configuration automatically.
 
 **Best configuration (selected by sweep):**
 
@@ -174,39 +245,12 @@ Loads `q_table.pkl` and runs four failure mode tests: reward hacking, demand sur
 
 ---
 
-## Key Results
-
-Evaluated over 200 episodes with seed=42:
-
-| Policy | Mean Reward | Std | Stockouts / ep |
-|---|---|---|---|
-| Random (lower bound) | $4,675 | $499 | 18.5 |
-| Reorder-Point s=60 S=120 | $5,512 | $222 | 15.5 |
-| Reorder-Point s=70 S=130 (best tuned) | $5,573 | $262 | 3.1 |
-| **Q-Learning Agent** | **$5,521** | **$257** | **9.4** |
-
-The Q-learning agent matches the standard reorder-point policy on profit and reduces stockouts by 39% relative to that baseline. The grid-searched reorder-point policy (s=70, S=130) edges ahead on raw profit but carries higher holding costs ($574 vs $521). The Q-learning agent targets leaner inventory profile that accepts more stockout risk in exchange for lower carrying costs. Whether this trade-off is better off will depend on how much weight the business places on storage costs versus service level consistency.
-
----
-
-## Plots
-
-| File | Description |
-|---|---|
-| `reward_curve.png` | Training reward per episode + 100-episode moving average. Shows convergence to ~$5,000 by episode 500. |
-| `policy_comparison.png` | Mean reward ± 1 std for all policies across 200 evaluation episodes. |
-| `cost_breakdown.png` | Stacked cost components (ordering, holding, stockout) per policy with net reward overlay. |
-| `behavior_episode.png` | Single greedy episode: inventory level, daily demand, and orders placed over 30 days. |
-| `instability.png` | Training reward comparison: Î±=0.1 (stable) vs Î±=0.9 (unstable). |
-
----
-
 ## Robustness & Risk Analysis
 
 | Failure Mode | Finding | Mitigation |
 |---|---|---|
 | Reward hacking | Under a $1 stockout penalty, agent chose "order 0" (order nothing) in 66.7% of steps | Validate stockout penalty against true lost-sale cost; alert on sustained near-zero stock |
-| Demand surge | Stockouts rose from 10.7 to 287.7/ep under 1.5× demand | Fallback to reorder-point policy when rolling avg demand > 1.3Ã— training mean; quarterly retraining on recent demand data |
+| Demand surge | Stockouts rose from 10.7 to 287.7/ep under 1.5× demand | Fallback to reorder-point policy when rolling avg demand > 1.3× training mean; quarterly retraining on recent demand data |
 | Training instability | alpha=0.9 produced reward std of 1,002 vs 283 for alpha=0.1 | Lock hyperparameters; require hold-out validation before retraining |
 | Distributional shift | Agent earned $4,979 vs reorder-point $4,886 on seasonal demand | Robust: the agent still outperforms the reorder-point policy. Domain randomisation recommended for future work |
 
@@ -214,6 +258,6 @@ The Q-learning agent matches the standard reorder-point policy on profit and red
 
 ## Deployment Recommendation
 
-**Shadow deployment recommended.** The agent demonstrates strong performance and consistently outperforms the random baseline while matching the performance of a traditional reorder-point policy. However, failure analysis revealed several vulnerabilities. Therefore, the agent is not ready for autonomous operation but is ready for a 30-day shadow period where its recommendations are logged and compared against current operations without being executed. See `business_memo.docx` for the full deployment argument and governance recommendations.
+**Shadow deployment recommended.** The agent demonstrates strong performance and consistently outperforms the random baseline while matching the performance of a traditional reorder-point policy. However, failure analysis revealed several vulnerabilities. Therefore, the agent is not ready for autonomous operation but is ready for a 30-day shadow period where its recommendations are logged and compared against current operations without being executed. See `docs/business_memo.pdf` for the full deployment argument and governance recommendations.
 
 
